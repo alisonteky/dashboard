@@ -18,7 +18,6 @@
     --branco:  #ffffff;
     --vermelho:#e53e3e;
     --verde:   #2f855a;
-    --laranja: #dd6b20; /* Nova cor para emergências */
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'DM Sans',sans-serif; background:var(--cinza-claro); color:#1e293b; min-height:100vh; }
@@ -125,10 +124,6 @@
   tbody tr { border-bottom:1px solid #e2e8f0; transition:background .15s; }
   tbody tr:hover { background:#f8faff; }
   tbody td { padding:11px 14px; color:#374151; vertical-align:middle; }
-  
-  /* Garante que a descrição não fique muito espremida */
-  .col-desc { min-width: 250px; max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
   .badge {
     display:inline-flex; align-items:center;
     padding:3px 10px; border-radius:99px; font-size:.72rem; font-weight:600;
@@ -139,7 +134,6 @@
   .badge-gray   { background:#e5e7eb; color:#374151; }
   .badge-red    { background:rgba(229,62,62,.12);  color:var(--vermelho); }
   .badge-green  { background:rgba(47,133,90,.12);  color:var(--verde); }
-  .badge-orange { background:rgba(221,107,32,.12); color:var(--laranja); } /* Novo Crachá Emergencial */
 
   /* ── PAGINATION ── */
   .pagination { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:16px; }
@@ -441,7 +435,7 @@
               <th>#</th>
               <th>Data</th>
               <th>Prefixo</th>
-              <th>Nº Globus</th> <th>Chapa</th>
+              <th>Chapa</th>
               <th>Classificação</th>
               <th>Qtd</th>
               <th>Descrição</th>
@@ -451,7 +445,7 @@
             </tr>
           </thead>
           <tbody id="tabela-geral-body">
-            <tr><td colspan="11" style="text-align:center;color:#94a3b8;padding:32px;">Conecte a sua planilha para visualizar os dados</td></tr>
+            <tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:32px;">Conecte a sua planilha para visualizar os dados</td></tr>
           </tbody>
         </table>
       </div>
@@ -488,8 +482,8 @@ const COL = {
 };
 
 const DADOS_EXEMPLO = [
-  {"DATA":"01/03/2026", "DATA CHEGADA":"03/03/2026", "PREFIXO":"2410", "CHAPA":"167", "N GLOBUS":"2080107", "CLASSIFICAÇÃO":"C", "QUANTIDADE":"1", "DESCRIÇÃO":"FOLHA MOLA 7a TRAS VW-17210", "TIPO DE PEDIDO":"PARADO", "VALOR":"200.00", "PREVISÃO DE ENTREGA/ STATUS":"ENTREGUE"},
-  {"DATA":"01/03/2026", "DATA CHEGADA":"10/03/2026", "PREFIXO":"2340", "CHAPA":"71", "N GLOBUS":"1010001", "CLASSIFICAÇÃO":"B", "QUANTIDADE":"2", "DESCRIÇÃO":"ABRACADEIRA CANO HIDRAULICO", "TIPO DE PEDIDO":"EMERGENCIAL", "VALOR":"45.50", "PREVISÃO DE ENTREGA/ STATUS":"EM COTAÇÃO"}
+  {"DATA":"01/03/2026", "DATA CHEGADA":"03/03/2026", "PREFIXO":"2410", "CHAPA":"167", "CLASSIFICAÇÃO":"C", "QUANTIDADE":"1", "DESCRIÇÃO":"FOLHA MOLA 7a TRAS VW-17210", "TIPO DE PEDIDO":"PARADO", "VALOR":"200.00", "PREVISÃO DE ENTREGA/ STATUS":"ENTREGUE"},
+  {"DATA":"01/03/2026", "DATA CHEGADA":"10/03/2026", "PREFIXO":"2340", "CHAPA":"71", "CLASSIFICAÇÃO":"B", "QUANTIDADE":"2", "DESCRIÇÃO":"ABRACADEIRA CANO HIDRAULICO", "TIPO DE PEDIDO":"EMERGENCIAL", "VALOR":"45.50", "PREVISÃO DE ENTREGA/ STATUS":"EM COTAÇÃO"}
 ];
 
 let DADOS_COMPLETOS  = [];
@@ -506,9 +500,11 @@ let chartColaborador= null;
 
 // ─── AUTENTICAÇÃO (LOGIN) ───────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
+  // Verifica se o usuário já fez login nesta sessão
   if (sessionStorage.getItem('auth') === 'true') {
     iniciarDashboard();
   } else {
+    // Se não estiver logado, mostra a tela de login
     document.getElementById('login-overlay').style.display = 'flex';
   }
 });
@@ -518,28 +514,34 @@ function fazerLogin() {
   const pass = document.getElementById('login-pass').value;
   
   if (user === USUARIO_CORRETO && pass === SENHA_CORRETA) {
-    sessionStorage.setItem('auth', 'true');
-    document.getElementById('login-overlay').style.display = 'none';
+    sessionStorage.setItem('auth', 'true'); // Salva a sessão
+    document.getElementById('login-overlay').style.display = 'none'; // Esconde a tela
     document.getElementById('login-error').style.display = 'none';
-    iniciarDashboard();
+    iniciarDashboard(); // Inicia o carregamento dos dados
   } else {
     document.getElementById('login-error').style.display = 'block';
   }
 }
 
 function fazerLogout() {
-  sessionStorage.removeItem('auth');
-  location.reload();
+  sessionStorage.removeItem('auth'); // Apaga a sessão
+  location.reload(); // Recarrega a página para voltar pra tela de login
 }
 
 function iniciarDashboard() {
+  // Esconde o overlay de login caso esteja visível
   document.getElementById('login-overlay').style.display = 'none';
-  if (SHEET_URL && SHEET_URL.trim() !== "") { carregarCSV(SHEET_URL); } 
-  else { abrirModal(); }
+  
+  // Segue com o carregamento da planilha original
+  if (SHEET_URL && SHEET_URL.trim() !== "") {
+    carregarCSV(SHEET_URL);
+  } else {
+    abrirModal();
+  }
 }
 
 
-// ─── FUNÇÕES DE FORMATAÇÃO ──────────────────────────────────────
+// ─── FUNÇÕES DE FORMATAÇÃO ROBUSTAS (Brasil) ────────────────────
 function parseMoeda(v) {
   if (typeof v === 'number') return v;
   if (!v) return 0;
@@ -644,7 +646,6 @@ function preencherFiltros() {
   classes.forEach(v  => { const o=document.createElement('option'); o.value=v; o.textContent=v; selC.appendChild(o); });
 }
 
-// ─── LÓGICA DE FILTROS MELHORADA ──────────────────────────────────
 function aplicarFiltros() {
   const inicio  = document.getElementById('f-inicio').value;
   const fim     = document.getElementById('f-fim').value;
@@ -654,11 +655,8 @@ function aplicarFiltros() {
 
   DADOS_FILTRADOS = DADOS_COMPLETOS.filter(d => {
     const data = d[COL.DATA] ? parseData(d[COL.DATA]) : null;
-    
-    // Melhoria 3: O filtro de data agora funciona independentemente
     if (inicio && data && data < new Date(inicio+'T00:00:00')) return false;
     if (fim    && data && data > new Date(fim+'T23:59:59'))    return false;
-    
     if (prefixo && d[COL.PREFIXO] !== prefixo)                 return false;
     if (tipo   && d[COL.TIPO_DE_PEDIDO] !== tipo)              return false;
     if (classe && d[COL.CLASSIFICACAO] !== classe)             return false;
@@ -823,19 +821,13 @@ function renderizarTabelaPecas() {
       const data = dt ? dt.toLocaleDateString('pt-BR') : '—';
       const valor = parseMoeda(d[COL.VALOR]).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
       const tipo  = d[COL.TIPO_DE_PEDIDO] || '—';
-      
-      // Melhoria 2: Crachás mais inteligentes para o Tipo
-      let tipoCor = 'badge-gray';
-      if(tipo.toLowerCase().includes('corretiv')) tipoCor = 'badge-red';
-      else if(tipo.toLowerCase().includes('preventiv')) tipoCor = 'badge-blue';
-      else if(tipo.toLowerCase().includes('emergencial')) tipoCor = 'badge-orange';
-
+      const tipoCor = tipo.toLowerCase().includes('corretiv') ? 'badge-red' : tipo.toLowerCase().includes('preventiv') ? 'badge-blue' : 'badge-gray';
       return `
         <tr>
           <td><span class="badge badge-blue">${d[COL.PREFIXO]||'—'}</span></td>
           <td><span class="badge badge-gray">${data}</span></td>
           <td><span class="badge badge-gold">${d[COL.CHAPA]||'—'}</span></td>
-          <td class="col-desc" title="${d[COL.DESCRICAO]||''}">${d[COL.DESCRICAO]||'—'}</td>
+          <td>${d[COL.DESCRICAO]||'—'}</td>
           <td><span class="badge ${tipoCor}">${tipo}</span></td>
           <td><strong>${valor}</strong></td>
         </tr>`;
@@ -851,42 +843,32 @@ function renderizarTabelaGeral() {
   const tbody  = document.getElementById('tabela-geral-body');
 
   if (pagina.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#94a3b8;padding:32px;">Nenhum dado disponível</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:32px;">Nenhum dado disponível</td></tr>';
   } else {
     tbody.innerHTML = pagina.map((d,i) => {
       const dt = parseData(d[COL.DATA]);
       const data  = dt ? dt.toLocaleDateString('pt-BR') : '—';
       const valor = parseMoeda(d[COL.VALOR]).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
       const tipo  = d[COL.TIPO_DE_PEDIDO]||'—';
-      
-      let tipoCor = 'badge-gray';
-      if(tipo.toLowerCase().includes('corretiv')) tipoCor = 'badge-red';
-      else if(tipo.toLowerCase().includes('preventiv')) tipoCor = 'badge-blue';
-      else if(tipo.toLowerCase().includes('emergencial')) tipoCor = 'badge-orange';
+      const tipoCor = tipo.toLowerCase().includes('corretiv') ? 'badge-red' : tipo.toLowerCase().includes('preventiv') ? 'badge-blue' : 'badge-gray';
       
       const status  = (d[COL.STATUS]||'').toLowerCase();
       
-      // Melhoria 2: Crachá mais inteligente para o STATUS
-      let statusBadge = '<span class="badge badge-gray">'+ (d[COL.STATUS] || '—') +'</span>';
-      if (status.includes('entregue')) statusBadge = '<span class="badge badge-green">Entregue</span>';
-      else if (status.includes('cota')) statusBadge = '<span class="badge badge-gold">Em Cotação</span>';
-      else if (status.includes('parad')) statusBadge = '<span class="badge badge-red">Parado</span>';
-
-      // Melhoria 1: Formatando N GLOBUS para inteiro, removendo notação cientifica se houver
-      let globusFormatado = d[COL.NUMERO_DO_GLOBUS] || '—';
-      if(globusFormatado !== '—' && !isNaN(globusFormatado)) {
-          globusFormatado = parseInt(Number(globusFormatado)).toString();
-      }
+      const statusBadge = status.includes('entregue')
+        ? '<span class="badge badge-green">Entregue</span>'
+        : status.includes('cota') 
+        ? '<span class="badge badge-gold">Em Cotação</span>' 
+        : '<span class="badge badge-gray">'+ (d[COL.STATUS] || '—') +'</span>';
 
       return `
         <tr>
           <td style="color:#94a3b8;font-size:.75rem;">${inicio+i+1}</td>
           <td>${data}</td>
           <td><span class="badge badge-blue">${d[COL.PREFIXO]||'—'}</span></td>
-          <td>${globusFormatado}</td> <td>${d[COL.CHAPA]||'—'}</td>
+          <td>${d[COL.CHAPA]||'—'}</td>
           <td>${d[COL.CLASSIFICACAO]||'—'}</td>
           <td>${d[COL.QUANTIDADE]||'—'}</td>
-          <td class="col-desc" title="${d[COL.DESCRICAO]||''}">${d[COL.DESCRICAO]||'—'}</td>
+          <td>${d[COL.DESCRICAO]||'—'}</td>
           <td><span class="badge ${tipoCor}">${tipo}</span></td>
           <td>${statusBadge}</td>
           <td><strong>${valor}</strong></td>
