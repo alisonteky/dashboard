@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Dashboard de Manutenção</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --azul:    #1a3a8f;
+    --azul-dark: #102060;
+    --dourado: #c9a84c;
+    --dourado-light: #f0d080;
+    --cinza:   #6b7280;
+    --cinza-claro: #f0f3fa;
+    --branco:  #ffffff;
+    --vermelho:#e53e3e;
+    --verde:   #2f855a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--cinza-claro); color:#1e293b; min-height:100vh; }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    position:fixed; left:0; top:0; bottom:0; width:230px;
+    background:var(--azul-dark);
+    display:flex; flex-direction:column; padding:0 0 24px;
+    box-shadow:4px 0 20px rgba(0,0,0,.18);
+    z-index:100;
+  }
+  .sidebar-logo {
+    padding:28px 24px 20px;
+    border-bottom:1px solid rgba(201,168,76,.25);
+  }
+  .sidebar-logo h1 {
+    font-family:'Playfair Display',serif;
+    color:var(--dourado); font-size:1.25rem; line-height:1.2;
+  }
+  .sidebar-logo span { color:#94a3b8; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; }
+  .sidebar-nav { padding:24px 12px; flex:1; }
+  .nav-item {
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px; border-radius:8px; margin-bottom:4px;
+    color:#94a3b8; font-size:.85rem; cursor:pointer;
+    transition:background .2s,color .2s;
+  }
+  .nav-item.active, .nav-item:hover { background:rgba(201,168,76,.15); color:var(--dourado); }
+  .nav-item svg { width:18px; height:18px; flex-shrink:0; }
+  .sidebar-footer { padding:0 24px; }
+  .sidebar-footer p { color:#475569; font-size:.72rem; }
+
+  /* ── MAIN ── */
+  .main { margin-left:230px; padding:32px 36px; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:32px; }
+  .topbar h2 { font-family:'Playfair Display',serif; font-size:1.7rem; color:var(--azul-dark); }
+  .topbar p  { color:var(--cinza); font-size:.85rem; margin-top:2px; }
+  .topbar-actions { display:flex; gap:10px; }
+  .btn {
+    padding:9px 20px; border-radius:8px; font-size:.82rem; font-weight:600;
+    cursor:pointer; border:none; transition:all .2s;
+  }
+  .btn-primary { background:var(--azul); color:#fff; }
+  .btn-primary:hover { background:var(--azul-dark); }
+  .btn-gold { background:var(--dourado); color:#1e293b; }
+  .btn-gold:hover { background:#b8962e; }
+
+  /* ── ABAS / PAGES (SPA) ── */
+  .page-view { display: none; animation: fadeIn 0.4s; }
+  .page-view.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── KPI CARDS ── */
+  .kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:22px; margin-bottom:28px; }
+  .kpi-card {
+    background:var(--branco); border-radius:14px;
+    padding:24px 26px; position:relative; overflow:hidden;
+    box-shadow:0 2px 12px rgba(26,58,143,.08);
+    border-left:4px solid var(--azul);
+  }
+  .kpi-card.gold  { border-left-color:var(--dourado); }
+  .kpi-card.red   { border-left-color:var(--vermelho); }
+  .kpi-card-icon {
+    width:44px; height:44px; border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    margin-bottom:14px; font-size:1.3rem;
+  }
+  .kpi-card-icon.blue   { background:rgba(26,58,143,.1); }
+  .kpi-card-icon.gold   { background:rgba(201,168,76,.15); }
+  .kpi-card-icon.red    { background:rgba(229,62,62,.1); }
+  .kpi-label  { font-size:.75rem; font-weight:600; color:var(--cinza); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; }
+  .kpi-value  { font-family:'Playfair Display',serif; font-size:2rem; color:var(--azul-dark); font-weight:700; }
+  .kpi-card.gold  .kpi-value { color:var(--dourado); }
+  .kpi-card.red   .kpi-value { color:var(--vermelho); }
+  .kpi-sub    { font-size:.75rem; color:var(--cinza); margin-top:4px; }
+
+  /* ── CHARTS ROW ── */
+  .charts-row { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-bottom:28px; }
+  .card {
+    background:var(--branco); border-radius:14px; padding:24px 26px;
+    box-shadow:0 2px 12px rgba(26,58,143,.08);
+  }
+  .card-title {
+    font-family:'Playfair Display',serif; font-size:1rem;
+    color:var(--azul-dark); margin-bottom:18px;
+    padding-bottom:12px; border-bottom:1px solid #e2e8f0;
+    display:flex; align-items:center; gap:8px;
+  }
+  .card-title span.dot {
+    width:8px; height:8px; border-radius:50%;
+    background:var(--dourado); display:inline-block;
+  }
+  .chart-wrap { position:relative; height:240px; }
+
+  /* ── FULL-WIDTH CARD ── */
+  .card-full { margin-bottom:28px; }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:.82rem; }
+  thead tr { background:var(--azul); color:#fff; }
+  thead th { padding:12px 14px; text-align:left; font-weight:600; white-space:nowrap; }
+  tbody tr { border-bottom:1px solid #e2e8f0; transition:background .15s; }
+  tbody tr:hover { background:#f8faff; }
+  tbody td { padding:11px 14px; color:#374151; vertical-align:middle; }
+  .badge {
+    display:inline-flex; align-items:center;
+    padding:3px 10px; border-radius:99px; font-size:.72rem; font-weight:600;
+    white-space:nowrap;
+  }
+  .badge-blue   { background:rgba(26,58,143,.12); color:var(--azul); }
+  .badge-gold   { background:rgba(201,168,76,.2);  color:#92680a; }
+  .badge-gray   { background:#e5e7eb; color:#374151; }
+  .badge-red    { background:rgba(229,62,62,.12);  color:var(--vermelho); }
+  .badge-green  { background:rgba(47,133,90,.12);  color:var(--verde); }
+
+  /* ── PAGINATION ── */
+  .pagination { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:16px; }
+  .page-btn {
+    padding:6px 12px; border-radius:7px; border:1px solid #e2e8f0;
+    background:#fff; font-size:.78rem; cursor:pointer; transition:all .15s;
+    color:var(--azul);
+  }
+  .page-btn.active, .page-btn:hover { background:var(--azul); color:#fff; border-color:var(--azul); }
+
+  /* ── FILTERS ── */
+  .filters { display:flex; gap:12px; margin-bottom:22px; flex-wrap:wrap; }
+  .filter-group { display:flex; flex-direction:column; gap:4px; }
+  .filter-group label { font-size:.72rem; font-weight:600; color:var(--cinza); text-transform:uppercase; letter-spacing:.05em; }
+  .filter-group select, .filter-group input {
+    padding:8px 12px; border-radius:8px; border:1px solid #e2e8f0;
+    background:#fff; font-size:.82rem; color:#374151;
+    min-width:150px; outline:none;
+  }
+  .filter-group select:focus, .filter-group input:focus { border-color:var(--azul); }
+
+  /* ── LOADING OVERLAY ── */
+  #loading-overlay {
+    position:fixed; inset:0; background:rgba(16,32,96,.92);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    z-index:9999; transition:opacity .4s;
+  }
+  #loading-overlay.hidden { opacity:0; pointer-events:none; }
+  .spinner {
+    width:48px; height:48px; border:4px solid rgba(201,168,76,.3);
+    border-top-color:var(--dourado); border-radius:50%;
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  #loading-overlay p { color:var(--dourado); margin-top:16px; font-size:.9rem; letter-spacing:.05em; }
+
+  /* ── CONFIG MODAL ── */
+  #config-modal {
+    position:fixed; inset:0; background:rgba(0,0,0,.5);
+    display:flex; align-items:center; justify-content:center;
+    z-index:9998; opacity:0; pointer-events:none; transition:opacity .3s;
+  }
+  #config-modal.visible { opacity:1; pointer-events:all; }
+  .modal-box {
+    background:#fff; border-radius:16px; padding:36px;
+    width:520px; max-width:95vw;
+    box-shadow:0 20px 60px rgba(0,0,0,.2);
+    position: relative; /* Adicionado para posicionar o botão X */
+  }
+  
+  /* NOVO CSS PARA O BOTÃO X */
+  .modal-close-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: transparent;
+    border: none;
+    font-size: 1.2rem;
+    color: var(--cinza);
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+  .modal-close-btn:hover {
+    color: var(--vermelho);
+    background: rgba(229,62,62,.1);
+  }
+
+  .modal-box h3 { font-family:'Playfair Display',serif; color:var(--azul-dark); font-size:1.3rem; margin-bottom:8px; }
+  .modal-box p  { color:var(--cinza); font-size:.85rem; margin-bottom:20px; line-height:1.6; }
+  .modal-input-wrap { display:flex; flex-direction:column; gap:6px; margin-bottom:20px; }
+  .modal-input-wrap label { font-size:.78rem; font-weight:600; color:var(--azul); text-transform:uppercase; letter-spacing:.06em; }
+  .modal-input-wrap input {
+    padding:11px 14px; border-radius:9px; border:2px solid #e2e8f0;
+    font-size:.88rem; outline:none; transition:border .2s;
+  }
+  .modal-input-wrap input:focus { border-color:var(--azul); }
+  .modal-actions { display:flex; gap:10px; justify-content:flex-end; }
+  .step-list { background:#f8faff; border-radius:10px; padding:16px 20px; margin-bottom:20px; }
+  .step-list li { font-size:.82rem; color:#374151; margin-bottom:8px; line-height:1.6; }
+  .step-list li:last-child { margin-bottom:0; }
+  .step-list li strong { color:var(--azul); }
+  .highlight-box {
+    background:rgba(201,168,76,.12); border:1px solid var(--dourado);
+    border-radius:8px; padding:10px 14px; margin-bottom:20px;
+    font-size:.8rem; color:#7a5c00;
+  }
+  @media(max-width:900px){
+    .sidebar{width:64px;}
+    .sidebar-logo h1,.sidebar-logo span,.nav-item span,.sidebar-footer{display:none;}
+    .main{margin-left:64px;padding:20px 16px;}
+    .kpi-row{grid-template-columns:1fr 1fr;}
+    .charts-row{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p>Carregando dashboard...</p>
+</div>
+
+<div id="config-modal">
+  <div class="modal-box">
+    <button class="modal-close-btn" onclick="fecharModal()" title="Fechar">✖</button>
+    
+    <h3>🔗 Conectar Planilha Google Sheets</h3>
+    <p>Siga os passos abaixo para publicar a sua planilha e cole o link aqui:</p>
+    <ol class="step-list">
+      <li><strong>1.</strong> Abra a sua planilha no Google Sheets</li>
+      <li><strong>2.</strong> Clique em <strong>Arquivo → Compartilhar → Publicar na Web</strong></li>
+      <li><strong>3.</strong> Em "Formato", selecione <strong>Valores separados por vírgula (.csv)</strong></li>
+      <li><strong>4.</strong> Clique em <strong>Publicar</strong> e copie o link gerado</li>
+    </ol>
+    <div class="highlight-box">
+      ⚠️ O link deve terminar com <strong>?output=csv</strong> para funcionar corretamente.
+    </div>
+    <div class="modal-input-wrap">
+      <label>Cole o link da planilha aqui:</label>
+      <input id="sheet-url-input" type="text" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv"/>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" style="background:#e2e8f0;color:#374151;" onclick="fecharModal()">Usar dados de exemplo</button>
+      <button class="btn btn-primary" onclick="carregarDoSheets()">Conectar Planilha ✓</button>
+    </div>
+  </div>
+</div>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <h1>Manutenção<br/>Dashboard</h1>
+    <span>Sistema de Gestão</span>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-item active" onclick="navegar('view-visao-geral', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>Visão Geral</span>
+    </div>
+    <div class="nav-item" onclick="navegar('view-analises', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      <span>Análises</span>
+    </div>
+    <div class="nav-item" onclick="navegar('view-pedidos', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      <span>Pedidos</span>
+    </div>
+    <div class="nav-item" onclick="abrirModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      <span>Configurações</span>
+    </div>
+  </div>
+  <div class="sidebar-footer">
+    <p>v2.0 — 2025</p>
+  </div>
+</nav>
+
+<main class="main">
+
+  <div class="topbar">
+    <div>
+      <h2 id="titulo-pagina">Painel de Manutenção</h2>
+      <p id="last-update">Atualize os dados conectando a sua planilha</p>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn" style="background:#e2e8f0;color:#374151;" onclick="carregarCSV(SHEET_URL)">🔄 Atualizar Dados</button>
+      
+      <button class="btn btn-primary" onclick="aplicarFiltros()">⚙ Filtrar</button>
+      <button class="btn btn-gold"    onclick="abrirModal()">🔗 Conectar Planilha</button>
+      <button class="btn" style="background:#e2e8f0;color:#374151;" onclick="exportarCSV()">⬇ Exportar</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="filter-group">
+      <label>Período Inicial</label>
+      <input type="date" id="f-inicio"/>
+    </div>
+    <div class="filter-group">
+      <label>Período Final</label>
+      <input type="date" id="f-fim"/>
+    </div>
+    <div class="filter-group">
+      <label>Prefixo</label>
+      <select id="f-prefixo"><option value="">Todos</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Tipo de Pedido</label>
+      <select id="f-tipo"><option value="">Todos</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Classificação</label>
+      <select id="f-class"><option value="">Todas</option></select>
+    </div>
+  </div>
+
+  <div id="view-visao-geral" class="page-view active">
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-card-icon blue">⏱️</div>
+        <div class="kpi-label">Lead Time Médio</div>
+        <div class="kpi-value" id="kpi-leadtime">—</div>
+        <div class="kpi-sub">dias entre solicitação e entrega</div>
+      </div>
+      <div class="kpi-card gold">
+        <div class="kpi-card-icon gold">💰</div>
+        <div class="kpi-label">Valor Total de Pedidos</div>
+        <div class="kpi-value" id="kpi-total">—</div>
+        <div class="kpi-sub" id="kpi-total-sub">total no período selecionado</div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-card-icon red">🔴</div>
+        <div class="kpi-label">Valor Parado em Estoque</div>
+        <div class="kpi-value" id="kpi-parado">—</div>
+        <div class="kpi-sub" id="kpi-parado-sub">peças não utilizadas</div>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> Evolução do Valor Parado em Estoque</div>
+        <div class="chart-wrap"><canvas id="chart-evolucao"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> Tipo de Pedido</div>
+        <div class="chart-wrap"><canvas id="chart-tipo"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card card-full">
+      <div class="card-title"><span class="dot"></span> 🔩 Peças Não Utilizadas (Estoque Parado)</div>
+      <div class="table-wrap">
+        <table id="tabela-pecas">
+          <thead>
+            <tr>
+              <th>Prefixo</th>
+              <th>Data</th>
+              <th>Colaborador (CHAPA)</th>
+              <th>Descrição da Peça</th>
+              <th>Tipo</th>
+              <th>Valor</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-pecas-body">
+            <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:32px;">Conecte a sua planilha para visualizar os dados</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="paginacao-pecas"></div>
+    </div>
+  </div>
+
+  <div id="view-analises" class="page-view">
+    <div class="charts-row">
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> Gastos por Equipamento (Prefixo)</div>
+        <div class="chart-wrap"><canvas id="chart-prefixo"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> Solicitações por Colaborador (CHAPA)</div>
+        <div class="chart-wrap"><canvas id="chart-colaborador"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-pedidos" class="page-view">
+    <div class="card card-full">
+      <div class="card-title"><span class="dot"></span> 📋 Histórico Geral de Pedidos</div>
+      <div class="table-wrap">
+        <table id="tabela-geral">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Data</th>
+              <th>Prefixo</th>
+              <th>Chapa</th>
+              <th>Classificação</th>
+              <th>Qtd</th>
+              <th>Descrição</th>
+              <th>Tipo</th>
+              <th>Status / Previsão</th>
+              <th>Valor</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-geral-body">
+            <tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:32px;">Conecte a sua planilha para visualizar os dados</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="paginacao-geral"></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+const SHEET_URL ="https://docs.google.com/spreadsheets/d/e/2PACX-1vQH2uRYFiAXoYlDWu5gEv9MPKK4FjQ8_3Wj7jlMVrBZvR2Z8YQpnqJRFCoJA_k9oQw7oR4OWVal0hr6/pub?output=csv";
+// ═══════════════════════════════════════════════════════════════
+
+// Mapeamento de colunas EXATAMENTE igual ao seu ficheiro CSV final
+const COL = {
+  DATA:                "DATA",
+  HORA:                "HORA",
+  PREFIXO:             "PREFIXO",
+  CHAPA:               "CHAPA", 
+  NUMERO_DO_GLOBUS:    "N GLOBUS",
+  CLASSIFICACAO:       "CLASSIFICAÇÃO",
+  QUANTIDADE:          "QUANTIDADE",
+  DESCRICAO:           "DESCRIÇÃO",
+  TIPO_DE_PEDIDO:      "TIPO DE PEDIDO", 
+  STATUS:              "PREVISÃO DE ENTREGA/ STATUS", 
+  DATA_CHEGADA:        "DATA CHEGADA", 
+  HORARIO_CHEGADA:     "HORÁRIO CHEGADA", 
+  VALOR:               "VALOR"
+};
+
+const DADOS_EXEMPLO = [
+  {"DATA":"01/03/2026", "DATA CHEGADA":"03/03/2026", "PREFIXO":"2410", "CHAPA":"167", "CLASSIFICAÇÃO":"C", "QUANTIDADE":"1", "DESCRIÇÃO":"FOLHA MOLA 7a TRAS VW-17210", "TIPO DE PEDIDO":"PARADO", "VALOR":"200.00", "PREVISÃO DE ENTREGA/ STATUS":"ENTREGUE"},
+  {"DATA":"01/03/2026", "DATA CHEGADA":"10/03/2026", "PREFIXO":"2340", "CHAPA":"71", "CLASSIFICAÇÃO":"B", "QUANTIDADE":"2", "DESCRIÇÃO":"ABRACADEIRA CANO HIDRAULICO", "TIPO DE PEDIDO":"EMERGENCIAL", "VALOR":"45.50", "PREVISÃO DE ENTREGA/ STATUS":"EM COTAÇÃO"}
+];
+
+let DADOS_COMPLETOS  = [];
+let DADOS_FILTRADOS  = [];
+let paginaGeralAtual = 1;
+let paginaPecasAtual = 1;
+const LINHAS_POR_PAG = 10;
+
+let chartEvolucao   = null;
+let chartTipo       = null;
+let chartPrefixo    = null;
+let chartColaborador= null;
+
+// ─── FUNÇÕES DE FORMATAÇÃO ROBUSTAS (Brasil) ────────────────────
+function parseMoeda(v) {
+  if (typeof v === 'number') return v;
+  if (!v) return 0;
+  let s = String(v).replace(/[R$\s]/g, '');
+  if (s.includes(',') && s.includes('.')) {
+      s = s.replace(/\./g, '').replace(',', '.');
+  } else if (s.includes(',')) {
+      s = s.replace(',', '.');
+  }
+  return parseFloat(s) || 0;
+}
+
+function parseData(dataStr) {
+  if (!dataStr) return null;
+  if (dataStr.includes('/')) {
+    const [d, m, y] = dataStr.split('/');
+    return new Date(`${y}-${m}-${d}T12:00:00`); 
+  }
+  return new Date(dataStr + 'T12:00:00');
+}
+
+
+// ─── NAVEGAÇÃO SPA (Abas) ───────────────────────────────────────
+function navegar(viewId, elementoLink) {
+  document.querySelectorAll('.page-view').forEach(el => el.classList.remove('active'));
+  document.getElementById(viewId).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  if(elementoLink) elementoLink.classList.add('active');
+  const titulos = {
+    'view-visao-geral': 'Painel de Manutenção',
+    'view-analises': 'Análises de Custos',
+    'view-pedidos': 'Controle de Pedidos'
+  };
+  document.getElementById('titulo-pagina').textContent = titulos[viewId];
+  if(viewId === 'view-analises') {
+    renderizarChartPrefixo();
+    renderizarChartColaborador();
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (SHEET_URL && SHEET_URL.trim() !== "") carregarCSV(SHEET_URL);
+  else abrirModal();
+});
+
+function abrirModal()  { document.getElementById('config-modal').classList.add('visible'); }
+function fecharModal() {
+  document.getElementById('config-modal').classList.remove('visible');
+  if (DADOS_COMPLETOS.length === 0) inicializarDados(DADOS_EXEMPLO);
+}
+
+function carregarDoSheets() {
+  const url = document.getElementById('sheet-url-input').value.trim();
+  if (!url) { alert('Por favor, cole o link da planilha.'); return; }
+  document.getElementById('config-modal').classList.remove('visible');
+  carregarCSV(url);
+}
+
+function carregarCSV(url) {
+  document.getElementById('loading-overlay').classList.remove('hidden');
+  
+  // TRUQUE ANTI-CACHE: Adiciona um número aleatório (timestamp) ao final do link
+  // Isso força o navegador a buscar a versão mais recente da planilha na internet
+  const urlAtualizada = url + "&nocache=" + new Date().getTime();
+
+  Papa.parse(urlAtualizada, {
+    download: true, 
+    header: true, 
+    skipEmptyLines: true,
+    complete: (res) => {
+      document.getElementById('loading-overlay').classList.add('hidden');
+      if (res.data && res.data.length > 0) {
+        inicializarDados(res.data);
+        document.getElementById('last-update').textContent = 'Última atualização: ' + new Date().toLocaleTimeString('pt-BR');
+      } else {
+        alert('Não foi possível carregar a planilha.');
+        inicializarDados(DADOS_EXEMPLO);
+      }
+    },
+    error: () => {
+      document.getElementById('loading-overlay').classList.add('hidden');
+      alert('Erro ao conectar com a planilha. Usando dados de exemplo.');
+      inicializarDados(DADOS_EXEMPLO);
+    }
+  });
+}
+
+function inicializarDados(dados) {
+  DADOS_COMPLETOS = dados;
+  document.getElementById('loading-overlay').classList.add('hidden');
+  preencherFiltros();
+  DADOS_FILTRADOS = [...DADOS_COMPLETOS];
+  renderizarTudo();
+}
+
+function preencherFiltros() {
+  const prefixos = [...new Set(DADOS_COMPLETOS.map(d => d[COL.PREFIXO]).filter(Boolean))].sort();
+  const tipos    = [...new Set(DADOS_COMPLETOS.map(d => d[COL.TIPO_DE_PEDIDO]).filter(Boolean))].sort();
+  const classes  = [...new Set(DADOS_COMPLETOS.map(d => d[COL.CLASSIFICACAO]).filter(Boolean))].sort();
+
+  const selP = document.getElementById('f-prefixo');
+  const selT = document.getElementById('f-tipo');
+  const selC = document.getElementById('f-class');
+
+  selP.innerHTML = '<option value="">Todos</option>';
+  selT.innerHTML = '<option value="">Todos</option>';
+  selC.innerHTML = '<option value="">Todas</option>';
+
+  prefixos.forEach(v => { const o=document.createElement('option'); o.value=v; o.textContent=v; selP.appendChild(o); });
+  tipos.forEach(v    => { const o=document.createElement('option'); o.value=v; o.textContent=v; selT.appendChild(o); });
+  classes.forEach(v  => { const o=document.createElement('option'); o.value=v; o.textContent=v; selC.appendChild(o); });
+}
+
+function aplicarFiltros() {
+  const inicio  = document.getElementById('f-inicio').value;
+  const fim     = document.getElementById('f-fim').value;
+  const prefixo = document.getElementById('f-prefixo').value;
+  const tipo    = document.getElementById('f-tipo').value;
+  const classe  = document.getElementById('f-class').value;
+
+  DADOS_FILTRADOS = DADOS_COMPLETOS.filter(d => {
+    const data = d[COL.DATA] ? parseData(d[COL.DATA]) : null;
+    if (inicio && data && data < new Date(inicio+'T00:00:00')) return false;
+    if (fim    && data && data > new Date(fim+'T23:59:59'))    return false;
+    if (prefixo && d[COL.PREFIXO] !== prefixo)                 return false;
+    if (tipo   && d[COL.TIPO_DE_PEDIDO] !== tipo)              return false;
+    if (classe && d[COL.CLASSIFICACAO] !== classe)             return false;
+    return true;
+  });
+  paginaGeralAtual = 1;
+  paginaPecasAtual = 1;
+  renderizarTudo();
+}
+
+function renderizarTudo() {
+  atualizarKPIs();
+  renderizarChartEvolucao();
+  renderizarChartTipo();
+  renderizarChartPrefixo();
+  renderizarChartColaborador();
+  renderizarTabelaPecas();
+  renderizarTabelaGeral();
+}
+
+// ─── KPIs ────────────────────────────────────────────────────────
+function atualizarKPIs() {
+  const total = DADOS_FILTRADOS.reduce((acc,d) => acc + parseMoeda(d[COL.VALOR]), 0);
+  document.getElementById('kpi-total').textContent = total.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  document.getElementById('kpi-total-sub').textContent = `${DADOS_FILTRADOS.length} pedidos no período`;
+
+  // Novo Lógica: Verifica tanto o TIPO_DE_PEDIDO quanto STATUS buscando pela palavra 'parad'
+  const paradas = DADOS_FILTRADOS.filter(d => {
+    const tipo = (d[COL.TIPO_DE_PEDIDO]||'').toLowerCase();
+    const status = (d[COL.STATUS]||'').toLowerCase();
+    return tipo.includes('parad') || status.includes('estoque') || status === ''; 
+  });
+  
+  const valorParado = paradas.reduce((acc,d) => acc + parseMoeda(d[COL.VALOR]), 0);
+  document.getElementById('kpi-parado').textContent = valorParado.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  document.getElementById('kpi-parado-sub').textContent = `${paradas.length} peças não utilizadas`;
+
+  let totalDias = 0, count = 0;
+  DADOS_FILTRADOS.forEach(d => {
+    if (d[COL.DATA] && d[COL.DATA_CHEGADA]) {
+      const dtSol = parseData(d[COL.DATA]);
+      const dtEnt = parseData(d[COL.DATA_CHEGADA]);
+      if(dtSol && dtEnt && !isNaN(dtSol) && !isNaN(dtEnt)){
+        const diff = (dtEnt - dtSol) / 86400000;
+        if (diff >= 0) { totalDias += diff; count++; }
+      }
+    }
+  });
+  document.getElementById('kpi-leadtime').textContent = count > 0 ? (totalDias/count).toFixed(1) + ' dias' : 'N/D';
+}
+
+function renderizarChartEvolucao() {
+  const paradas = DADOS_FILTRADOS.filter(d => {
+    const tipo = (d[COL.TIPO_DE_PEDIDO]||'').toLowerCase();
+    const status = (d[COL.STATUS]||'').toLowerCase();
+    return tipo.includes('parad') || status.includes('estoque') || status === '';
+  });
+
+  const meses = {};
+  paradas.forEach(d => {
+    if (!d[COL.DATA]) return;
+    const dt = parseData(d[COL.DATA]);
+    if(!dt || isNaN(dt)) return;
+    const key = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
+    meses[key] = (meses[key]||0) + parseMoeda(d[COL.VALOR]);
+  });
+
+  const sortedKeys  = Object.keys(meses).sort();
+  const labels      = sortedKeys.map(k => {
+    const [y,m] = k.split('-');
+    return new Date(y,m-1).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});
+  });
+  const valores = sortedKeys.map(k => meses[k]);
+
+  if (chartEvolucao) chartEvolucao.destroy();
+  chartEvolucao = new Chart(document.getElementById('chart-evolucao'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Valor Parado (R$)',
+        data: valores, borderColor: '#e53e3e', backgroundColor: 'rgba(229,62,62,.08)',
+        borderWidth: 2.5, pointRadius: 5, pointBackgroundColor: '#e53e3e', tension: 0.35, fill: true
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { grid: { display: false } }, y: { grid: { color: '#f1f5f9' }, ticks: { callback: v => 'R$ '+v.toLocaleString('pt-BR') } } }
+    }
+  });
+}
+
+function renderizarChartTipo() {
+  const contagem = {};
+  DADOS_FILTRADOS.forEach(d => {
+    const t = d[COL.TIPO_DE_PEDIDO] || 'Não informado';
+    contagem[t] = (contagem[t]||0) + 1;
+  });
+
+  const labels = Object.keys(contagem);
+  const valores = Object.values(contagem);
+  const cores = ['#1a3a8f','#c9a84c','#6b7280','#e53e3e','#2f855a','#d69e2e','#3182ce'];
+
+  if (chartTipo) chartTipo.destroy();
+  chartTipo = new Chart(document.getElementById('chart-tipo'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: valores, backgroundColor: cores, borderWidth: 3, borderColor: '#fff' }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'right', labels: { font: { size: 12, family: 'DM Sans' }, padding: 14, usePointStyle: true } } } }
+  });
+}
+
+function renderizarChartPrefixo() {
+  if(!document.getElementById('chart-prefixo')) return;
+  const valoresPorPrefixo = {};
+  DADOS_FILTRADOS.forEach(d => {
+    const p = d[COL.PREFIXO] || 'Sem Prefixo';
+    valoresPorPrefixo[p] = (valoresPorPrefixo[p]||0) + parseMoeda(d[COL.VALOR]);
+  });
+  const dadosOrdenados = Object.keys(valoresPorPrefixo).map(k => ({nome: k, valor: valoresPorPrefixo[k]})).sort((a,b) => b.valor - a.valor).slice(0, 10);
+  if (chartPrefixo) chartPrefixo.destroy();
+  chartPrefixo = new Chart(document.getElementById('chart-prefixo'), {
+    type: 'bar',
+    data: { labels: dadosOrdenados.map(d => d.nome), datasets: [{ label: 'Custo Total (R$)', data: dadosOrdenados.map(d => d.valor), backgroundColor: 'rgba(26,58,143,.8)', borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v => 'R$ '+v.toLocaleString('pt-BR') } } } }
+  });
+}
+
+function renderizarChartColaborador() {
+  if(!document.getElementById('chart-colaborador')) return;
+  const qtdPorColab = {};
+  DADOS_FILTRADOS.forEach(d => {
+    const c = d[COL.CHAPA] || 'Não Informado';
+    qtdPorColab[c] = (qtdPorColab[c]||0) + 1;
+  });
+  const dadosOrdenados = Object.keys(qtdPorColab).map(k => ({nome: k, valor: qtdPorColab[k]})).sort((a,b) => b.valor - a.valor).slice(0, 7);
+  if (chartColaborador) chartColaborador.destroy();
+  chartColaborador = new Chart(document.getElementById('chart-colaborador'), {
+    type: 'bar',
+    data: { labels: dadosOrdenados.map(d => d.nome), datasets: [{ label: 'Nº Solicitações', data: dadosOrdenados.map(d => d.valor), backgroundColor: 'rgba(201,168,76,.8)', borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+  });
+}
+
+// ─── TABELAS ─────────────────────────────────────────────────────
+function renderizarTabelaPecas() {
+  const paradas = DADOS_FILTRADOS.filter(d => {
+    const tipo = (d[COL.TIPO_DE_PEDIDO]||'').toLowerCase();
+    const status = (d[COL.STATUS]||'').toLowerCase();
+    return tipo.includes('parad') || status.includes('estoque') || status === '';
+  });
+
+  const total = paradas.length;
+  const inicio = (paginaPecasAtual-1)*LINHAS_POR_PAG;
+  const pagina = paradas.slice(inicio, inicio+LINHAS_POR_PAG);
+  const tbody = document.getElementById('tabela-pecas-body');
+
+  if (pagina.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:32px;">Nenhuma peça parada encontrada</td></tr>';
+  } else {
+    tbody.innerHTML = pagina.map(d => {
+      const dt = parseData(d[COL.DATA]);
+      const data = dt ? dt.toLocaleDateString('pt-BR') : '—';
+      const valor = parseMoeda(d[COL.VALOR]).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+      const tipo  = d[COL.TIPO_DE_PEDIDO] || '—';
+      const tipoCor = tipo.toLowerCase().includes('corretiv') ? 'badge-red' : tipo.toLowerCase().includes('preventiv') ? 'badge-blue' : 'badge-gray';
+      return `
+        <tr>
+          <td><span class="badge badge-blue">${d[COL.PREFIXO]||'—'}</span></td>
+          <td><span class="badge badge-gray">${data}</span></td>
+          <td><span class="badge badge-gold">${d[COL.CHAPA]||'—'}</span></td>
+          <td>${d[COL.DESCRICAO]||'—'}</td>
+          <td><span class="badge ${tipoCor}">${tipo}</span></td>
+          <td><strong>${valor}</strong></td>
+        </tr>`;
+    }).join('');
+  }
+  renderizarPaginacao('paginacao-pecas', total, paginaPecasAtual, 'mudarPaginaPecas');
+}
+
+function renderizarTabelaGeral() {
+  const total  = DADOS_FILTRADOS.length;
+  const inicio = (paginaGeralAtual-1)*LINHAS_POR_PAG;
+  const pagina = DADOS_FILTRADOS.slice(inicio, inicio+LINHAS_POR_PAG);
+  const tbody  = document.getElementById('tabela-geral-body');
+
+  if (pagina.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:32px;">Nenhum dado disponível</td></tr>';
+  } else {
+    tbody.innerHTML = pagina.map((d,i) => {
+      const dt = parseData(d[COL.DATA]);
+      const data  = dt ? dt.toLocaleDateString('pt-BR') : '—';
+      const valor = parseMoeda(d[COL.VALOR]).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+      const tipo  = d[COL.TIPO_DE_PEDIDO]||'—';
+      const tipoCor = tipo.toLowerCase().includes('corretiv') ? 'badge-red' : tipo.toLowerCase().includes('preventiv') ? 'badge-blue' : 'badge-gray';
+      
+      const status  = (d[COL.STATUS]||'').toLowerCase();
+      
+      // Crachá mais inteligente para o STATUS
+      const statusBadge = status.includes('entregue')
+        ? '<span class="badge badge-green">Entregue</span>'
+        : status.includes('cota') 
+        ? '<span class="badge badge-gold">Em Cotação</span>' 
+        : '<span class="badge badge-gray">'+ (d[COL.STATUS] || '—') +'</span>';
+
+      return `
+        <tr>
+          <td style="color:#94a3b8;font-size:.75rem;">${inicio+i+1}</td>
+          <td>${data}</td>
+          <td><span class="badge badge-blue">${d[COL.PREFIXO]||'—'}</span></td>
+          <td>${d[COL.CHAPA]||'—'}</td>
+          <td>${d[COL.CLASSIFICACAO]||'—'}</td>
+          <td>${d[COL.QUANTIDADE]||'—'}</td>
+          <td>${d[COL.DESCRICAO]||'—'}</td>
+          <td><span class="badge ${tipoCor}">${tipo}</span></td>
+          <td>${statusBadge}</td>
+          <td><strong>${valor}</strong></td>
+        </tr>`;
+    }).join('');
+  }
+  renderizarPaginacao('paginacao-geral', total, paginaGeralAtual, 'mudarPaginaGeral');
+}
+
+function mudarPaginaPecas(p) { paginaPecasAtual = p; renderizarTabelaPecas(); }
+function mudarPaginaGeral(p) { paginaGeralAtual = p; renderizarTabelaGeral(); }
+
+function renderizarPaginacao(containerId, total, paginaAtual, nomeFuncao) {
+  const totalPaginas = Math.ceil(total/LINHAS_POR_PAG);
+  const container = document.getElementById(containerId);
+  if (totalPaginas <= 1) { container.innerHTML=''; return; }
+
+  let html = '';
+  if (paginaAtual > 1) html += `<button class="page-btn" onclick="${nomeFuncao}(${paginaAtual-1})">‹</button>`;
+  for (let p=1; p<=totalPaginas; p++) {
+    if (p===1||p===totalPaginas||Math.abs(p-paginaAtual)<=1) {
+      html += `<button class="page-btn${p===paginaAtual?' active':''}" onclick="${nomeFuncao}(${p})">${p}</button>`;
+    } else if (Math.abs(p-paginaAtual)===2) {
+      html += `<span style="padding:0 4px;color:#94a3b8">…</span>`;
+    }
+  }
+  if (paginaAtual < totalPaginas) html += `<button class="page-btn" onclick="${nomeFuncao}(${paginaAtual+1})">›</button>`;
+  container.innerHTML = html;
+}
+
+function exportarCSV() {
+  if (!DADOS_FILTRADOS.length) { alert('Nenhum dado para exportar.'); return; }
+  const cols = Object.values(COL);
+  const linhas = [cols.join(',')];
+  DADOS_FILTRADOS.forEach(d => {
+    linhas.push(cols.map(c => `"${(d[c]||'').toString().replace(/"/g,'""')}"`).join(','));
+  });
+  const blob = new Blob(['\uFEFF'+linhas.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'dashboard_manutencao.csv';
+  link.click();
+}
+</script>
+</body>
+</html>
