@@ -18,6 +18,7 @@
     --branco:  #ffffff;
     --vermelho:#e53e3e;
     --verde:   #2f855a;
+    --laranja: #dd6b20;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'DM Sans',sans-serif; background:var(--cinza-claro); color:#1e293b; min-height:100vh; }
@@ -117,13 +118,16 @@
   .card-full { margin-bottom:28px; }
 
   /* ── TABLE ── */
-  .table-wrap { overflow-x:auto; }
+  .table-wrap { overflow-x:auto; padding-bottom: 10px; } /* Evita corte da barra de rolagem */
   table { width:100%; border-collapse:collapse; font-size:.82rem; }
   thead tr { background:var(--azul); color:#fff; }
   thead th { padding:12px 14px; text-align:left; font-weight:600; white-space:nowrap; }
   tbody tr { border-bottom:1px solid #e2e8f0; transition:background .15s; }
   tbody tr:hover { background:#f8faff; }
-  tbody td { padding:11px 14px; color:#374151; vertical-align:middle; }
+  tbody td { padding:11px 14px; color:#374151; vertical-align:middle; white-space: nowrap; }
+  
+  .col-desc { min-width: 200px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+
   .badge {
     display:inline-flex; align-items:center;
     padding:3px 10px; border-radius:99px; font-size:.72rem; font-weight:600;
@@ -134,6 +138,7 @@
   .badge-gray   { background:#e5e7eb; color:#374151; }
   .badge-red    { background:rgba(229,62,62,.12);  color:var(--vermelho); }
   .badge-green  { background:rgba(47,133,90,.12);  color:var(--verde); }
+  .badge-orange { background:rgba(221,107,32,.12); color:var(--laranja); } 
 
   /* ── PAGINATION ── */
   .pagination { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:16px; }
@@ -434,18 +439,25 @@
             <tr>
               <th>#</th>
               <th>Data</th>
+              <th>Hora</th>
               <th>Prefixo</th>
               <th>Chapa</th>
+              <th>Nº Globus</th>
               <th>Classificação</th>
               <th>Qtd</th>
               <th>Descrição</th>
-              <th>Tipo</th>
-              <th>Status / Previsão</th>
+              <th>MIN</th>
+              <th>Tipo Pedido</th>
+              <th>Status/Prev.</th>
+              <th>Data Chegada</th>
+              <th>Hora Chegada</th>
+              <th>Data Utilização</th>
+              <th>Hora Utilização</th>
               <th>Valor</th>
             </tr>
           </thead>
           <tbody id="tabela-geral-body">
-            <tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:32px;">Conecte a sua planilha para visualizar os dados</td></tr>
+            <tr><td colspan="17" style="text-align:center;color:#94a3b8;padding:32px;">Conecte a sua planilha para visualizar os dados</td></tr>
           </tbody>
         </table>
       </div>
@@ -474,16 +486,18 @@ const COL = {
   CLASSIFICACAO:       "CLASSIFICAÇÃO",
   QUANTIDADE:          "QUANTIDADE",
   DESCRICAO:           "DESCRIÇÃO",
+  MIN:                 "MIN",
   TIPO_DE_PEDIDO:      "TIPO DE PEDIDO", 
   STATUS:              "PREVISÃO DE ENTREGA/ STATUS", 
   DATA_CHEGADA:        "DATA CHEGADA", 
   HORARIO_CHEGADA:     "HORÁRIO CHEGADA", 
+  DATA_UTILIZACAO:     "DATA DE UTILIZAÇÃO",
+  HORARIO_UTILIZACAO:  "HORÁRIO UTILIZAÇÃO",
   VALOR:               "VALOR"
 };
 
 const DADOS_EXEMPLO = [
-  {"DATA":"01/03/2026", "DATA CHEGADA":"03/03/2026", "PREFIXO":"2410", "CHAPA":"167", "CLASSIFICAÇÃO":"C", "QUANTIDADE":"1", "DESCRIÇÃO":"FOLHA MOLA 7a TRAS VW-17210", "TIPO DE PEDIDO":"PARADO", "VALOR":"200.00", "PREVISÃO DE ENTREGA/ STATUS":"ENTREGUE"},
-  {"DATA":"01/03/2026", "DATA CHEGADA":"10/03/2026", "PREFIXO":"2340", "CHAPA":"71", "CLASSIFICAÇÃO":"B", "QUANTIDADE":"2", "DESCRIÇÃO":"ABRACADEIRA CANO HIDRAULICO", "TIPO DE PEDIDO":"EMERGENCIAL", "VALOR":"45.50", "PREVISÃO DE ENTREGA/ STATUS":"EM COTAÇÃO"}
+  {"DATA":"01/03/2026", "HORA":"08:00", "PREFIXO":"2410", "CHAPA":"167", "N GLOBUS":"2080107", "CLASSIFICAÇÃO":"C", "QUANTIDADE":"1", "DESCRIÇÃO":"FOLHA MOLA 7a TRAS VW", "MIN":"N/A", "TIPO DE PEDIDO":"PARADO", "PREVISÃO DE ENTREGA/ STATUS":"ENTREGUE", "DATA CHEGADA":"03/03/2026", "HORÁRIO CHEGADA":"14:00", "DATA DE UTILIZAÇÃO":"04/03/2026", "HORÁRIO UTILIZAÇÃO":"09:00", "VALOR":"200.00"}
 ];
 
 let DADOS_COMPLETOS  = [];
@@ -497,14 +511,11 @@ let chartTipo       = null;
 let chartPrefixo    = null;
 let chartColaborador= null;
 
-
 // ─── AUTENTICAÇÃO (LOGIN) ───────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  // Verifica se o usuário já fez login nesta sessão
   if (sessionStorage.getItem('auth') === 'true') {
     iniciarDashboard();
   } else {
-    // Se não estiver logado, mostra a tela de login
     document.getElementById('login-overlay').style.display = 'flex';
   }
 });
@@ -514,34 +525,28 @@ function fazerLogin() {
   const pass = document.getElementById('login-pass').value;
   
   if (user === USUARIO_CORRETO && pass === SENHA_CORRETA) {
-    sessionStorage.setItem('auth', 'true'); // Salva a sessão
-    document.getElementById('login-overlay').style.display = 'none'; // Esconde a tela
+    sessionStorage.setItem('auth', 'true');
+    document.getElementById('login-overlay').style.display = 'none';
     document.getElementById('login-error').style.display = 'none';
-    iniciarDashboard(); // Inicia o carregamento dos dados
+    iniciarDashboard();
   } else {
     document.getElementById('login-error').style.display = 'block';
   }
 }
 
 function fazerLogout() {
-  sessionStorage.removeItem('auth'); // Apaga a sessão
-  location.reload(); // Recarrega a página para voltar pra tela de login
+  sessionStorage.removeItem('auth');
+  location.reload();
 }
 
 function iniciarDashboard() {
-  // Esconde o overlay de login caso esteja visível
   document.getElementById('login-overlay').style.display = 'none';
-  
-  // Segue com o carregamento da planilha original
-  if (SHEET_URL && SHEET_URL.trim() !== "") {
-    carregarCSV(SHEET_URL);
-  } else {
-    abrirModal();
-  }
+  if (SHEET_URL && SHEET_URL.trim() !== "") { carregarCSV(SHEET_URL); } 
+  else { abrirModal(); }
 }
 
 
-// ─── FUNÇÕES DE FORMATAÇÃO ROBUSTAS (Brasil) ────────────────────
+// ─── FUNÇÕES DE FORMATAÇÃO ──────────────────────────────────────
 function parseMoeda(v) {
   if (typeof v === 'number') return v;
   if (!v) return 0;
@@ -561,6 +566,13 @@ function parseData(dataStr) {
     return new Date(`${y}-${m}-${d}T12:00:00`); 
   }
   return new Date(dataStr + 'T12:00:00');
+}
+
+function formatarHora(horaStr) {
+  if (!horaStr || horaStr.trim() === '') return '—';
+  // Evita exibir datas que o excel converteu errado (ex: 1899-12-30)
+  if (horaStr.length > 8) return '—';
+  return horaStr;
 }
 
 // ─── NAVEGAÇÃO SPA (Abas) ───────────────────────────────────────
@@ -655,8 +667,10 @@ function aplicarFiltros() {
 
   DADOS_FILTRADOS = DADOS_COMPLETOS.filter(d => {
     const data = d[COL.DATA] ? parseData(d[COL.DATA]) : null;
+    
     if (inicio && data && data < new Date(inicio+'T00:00:00')) return false;
     if (fim    && data && data > new Date(fim+'T23:59:59'))    return false;
+    
     if (prefixo && d[COL.PREFIXO] !== prefixo)                 return false;
     if (tipo   && d[COL.TIPO_DE_PEDIDO] !== tipo)              return false;
     if (classe && d[COL.CLASSIFICACAO] !== classe)             return false;
@@ -821,13 +835,18 @@ function renderizarTabelaPecas() {
       const data = dt ? dt.toLocaleDateString('pt-BR') : '—';
       const valor = parseMoeda(d[COL.VALOR]).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
       const tipo  = d[COL.TIPO_DE_PEDIDO] || '—';
-      const tipoCor = tipo.toLowerCase().includes('corretiv') ? 'badge-red' : tipo.toLowerCase().includes('preventiv') ? 'badge-blue' : 'badge-gray';
+      
+      let tipoCor = 'badge-gray';
+      if(tipo.toLowerCase().includes('corretiv')) tipoCor = 'badge-red';
+      else if(tipo.toLowerCase().includes('preventiv')) tipoCor = 'badge-blue';
+      else if(tipo.toLowerCase().includes('emergencial')) tipoCor = 'badge-orange';
+
       return `
         <tr>
           <td><span class="badge badge-blue">${d[COL.PREFIXO]||'—'}</span></td>
           <td><span class="badge badge-gray">${data}</span></td>
           <td><span class="badge badge-gold">${d[COL.CHAPA]||'—'}</span></td>
-          <td>${d[COL.DESCRICAO]||'—'}</td>
+          <td class="col-desc" title="${d[COL.DESCRICAO]||''}">${d[COL.DESCRICAO]||'—'}</td>
           <td><span class="badge ${tipoCor}">${tipo}</span></td>
           <td><strong>${valor}</strong></td>
         </tr>`;
@@ -843,34 +862,61 @@ function renderizarTabelaGeral() {
   const tbody  = document.getElementById('tabela-geral-body');
 
   if (pagina.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:32px;">Nenhum dado disponível</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;color:#94a3b8;padding:32px;">Nenhum dado disponível</td></tr>';
   } else {
     tbody.innerHTML = pagina.map((d,i) => {
+      // Datas
       const dt = parseData(d[COL.DATA]);
       const data  = dt ? dt.toLocaleDateString('pt-BR') : '—';
+      
+      const dtChegada = parseData(d[COL.DATA_CHEGADA]);
+      const dataChegada = dtChegada ? dtChegada.toLocaleDateString('pt-BR') : '—';
+      
+      const dtUtil = parseData(d[COL.DATA_UTILIZACAO]);
+      const dataUtil = dtUtil ? dtUtil.toLocaleDateString('pt-BR') : '—';
+
+      // Horas formatadas (evita erros do excel)
+      const hora = formatarHora(d[COL.HORA]);
+      const horaChegada = formatarHora(d[COL.HORARIO_CHEGADA]);
+      const horaUtil = formatarHora(d[COL.HORARIO_UTILIZACAO]);
+
       const valor = parseMoeda(d[COL.VALOR]).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
       const tipo  = d[COL.TIPO_DE_PEDIDO]||'—';
-      const tipoCor = tipo.toLowerCase().includes('corretiv') ? 'badge-red' : tipo.toLowerCase().includes('preventiv') ? 'badge-blue' : 'badge-gray';
+      
+      let tipoCor = 'badge-gray';
+      if(tipo.toLowerCase().includes('corretiv')) tipoCor = 'badge-red';
+      else if(tipo.toLowerCase().includes('preventiv')) tipoCor = 'badge-blue';
+      else if(tipo.toLowerCase().includes('emergencial')) tipoCor = 'badge-orange';
       
       const status  = (d[COL.STATUS]||'').toLowerCase();
-      
-      const statusBadge = status.includes('entregue')
-        ? '<span class="badge badge-green">Entregue</span>'
-        : status.includes('cota') 
-        ? '<span class="badge badge-gold">Em Cotação</span>' 
-        : '<span class="badge badge-gray">'+ (d[COL.STATUS] || '—') +'</span>';
+      let statusBadge = '<span class="badge badge-gray">'+ (d[COL.STATUS] || '—') +'</span>';
+      if (status.includes('entregue')) statusBadge = '<span class="badge badge-green">Entregue</span>';
+      else if (status.includes('cota')) statusBadge = '<span class="badge badge-gold">Em Cotação</span>';
+      else if (status.includes('parad')) statusBadge = '<span class="badge badge-red">Parado</span>';
+
+      let globusFormatado = d[COL.NUMERO_DO_GLOBUS] || '—';
+      if(globusFormatado !== '—' && !isNaN(globusFormatado)) {
+          globusFormatado = parseInt(Number(globusFormatado)).toString();
+      }
 
       return `
         <tr>
           <td style="color:#94a3b8;font-size:.75rem;">${inicio+i+1}</td>
           <td>${data}</td>
+          <td>${hora}</td>
           <td><span class="badge badge-blue">${d[COL.PREFIXO]||'—'}</span></td>
           <td>${d[COL.CHAPA]||'—'}</td>
+          <td>${globusFormatado}</td>
           <td>${d[COL.CLASSIFICACAO]||'—'}</td>
           <td>${d[COL.QUANTIDADE]||'—'}</td>
-          <td>${d[COL.DESCRICAO]||'—'}</td>
+          <td class="col-desc" title="${d[COL.DESCRICAO]||''}">${d[COL.DESCRICAO]||'—'}</td>
+          <td>${d[COL.MIN]||'—'}</td>
           <td><span class="badge ${tipoCor}">${tipo}</span></td>
           <td>${statusBadge}</td>
+          <td>${dataChegada}</td>
+          <td>${horaChegada}</td>
+          <td>${dataUtil}</td>
+          <td>${horaUtil}</td>
           <td><strong>${valor}</strong></td>
         </tr>`;
     }).join('');
