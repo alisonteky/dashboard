@@ -96,6 +96,18 @@
   .kpi-card.red   .kpi-value { color:var(--vermelho); }
   .kpi-sub    { font-size:.75rem; color:var(--cinza); margin-top:4px; }
 
+  /* MINI KPIs (Atualizado para 4 colunas) */
+  .mini-kpi-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; height: 100%;
+    align-items: center;
+  }
+  .mini-kpi-box {
+    background: var(--cinza-claro); border-radius: 10px; padding: 20px 14px; text-align: center;
+    border: 1px solid #e2e8f0;
+  }
+  .mini-kpi-box h4 { font-size: 0.8rem; color: var(--cinza); text-transform: uppercase; margin-bottom: 6px;}
+  .mini-kpi-box span { font-size: 1.8rem; font-weight: 700; color: var(--azul-dark); font-family:'Playfair Display',serif;}
+
   /* ── CHARTS ROW ── */
   .charts-row { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-bottom:28px; }
   .card {
@@ -118,7 +130,7 @@
   .card-full { margin-bottom:28px; }
 
   /* ── TABLE ── */
-  .table-wrap { overflow-x:auto; padding-bottom: 10px; } /* Evita corte da barra de rolagem */
+  .table-wrap { overflow-x:auto; padding-bottom: 10px; }
   table { width:100%; border-collapse:collapse; font-size:.82rem; }
   thead tr { background:var(--azul); color:#fff; }
   thead th { padding:12px 14px; text-align:left; font-weight:600; white-space:nowrap; }
@@ -367,7 +379,7 @@
         <div class="kpi-card-icon blue">⏱️</div>
         <div class="kpi-label">Lead Time Médio</div>
         <div class="kpi-value" id="kpi-leadtime">—</div>
-        <div class="kpi-sub">dias entre solicitação e entrega</div>
+        <div class="kpi-sub">dias entre solicitação e chegada</div>
       </div>
       <div class="kpi-card gold">
         <div class="kpi-card-icon gold">💰</div>
@@ -385,8 +397,25 @@
 
     <div class="charts-row">
       <div class="card">
-        <div class="card-title"><span class="dot"></span> Evolução do Valor Parado em Estoque</div>
-        <div class="chart-wrap"><canvas id="chart-evolucao"></canvas></div>
+        <div class="card-title"><span class="dot"></span> Pedidos por Classificação</div>
+        <div class="mini-kpi-grid">
+          <div class="mini-kpi-box">
+            <h4>Classe A</h4>
+            <span id="kpi-class-a">0</span>
+          </div>
+          <div class="mini-kpi-box">
+            <h4>Classe B</h4>
+            <span id="kpi-class-b">0</span>
+          </div>
+          <div class="mini-kpi-box">
+            <h4>Classe C</h4>
+            <span id="kpi-class-c">0</span>
+          </div>
+          <div class="mini-kpi-box">
+            <h4>SC</h4>
+            <span id="kpi-class-sc">0</span>
+          </div>
+        </div>
       </div>
       <div class="card">
         <div class="card-title"><span class="dot"></span> Tipo de Pedido</div>
@@ -418,6 +447,11 @@
   </div>
 
   <div id="view-analises" class="page-view">
+    <div class="card card-full">
+      <div class="card-title"><span class="dot"></span> Evolução do Valor Parado em Estoque</div>
+      <div class="chart-wrap" style="height: 280px;"><canvas id="chart-evolucao"></canvas></div>
+    </div>
+
     <div class="charts-row">
       <div class="card">
         <div class="card-title"><span class="dot"></span> Gastos por Equipamento (Prefixo)</div>
@@ -453,11 +487,13 @@
               <th>Hora Chegada</th>
               <th>Data Utilização</th>
               <th>Hora Utilização</th>
+              <th>LeadTime</th>
               <th>Valor</th>
+              <th>Frete</th>
             </tr>
           </thead>
           <tbody id="tabela-geral-body">
-            <tr><td colspan="17" style="text-align:center;color:#94a3b8;padding:32px;">Conecte a sua planilha para visualizar os dados</td></tr>
+            <tr><td colspan="19" style="text-align:center;color:#94a3b8;padding:32px;">Conecte a sua planilha para visualizar os dados</td></tr>
           </tbody>
         </table>
       </div>
@@ -493,11 +529,12 @@ const COL = {
   HORARIO_CHEGADA:     "HORÁRIO CHEGADA", 
   DATA_UTILIZACAO:     "DATA DE UTILIZAÇÃO",
   HORARIO_UTILIZACAO:  "HORÁRIO UTILIZAÇÃO",
-  VALOR:               "VALOR"
+  VALOR:               "VALOR",
+  FRETE:               "FRETE"
 };
 
 const DADOS_EXEMPLO = [
-  {"DATA":"01/03/2026", "HORA":"08:00", "PREFIXO":"2410", "CHAPA":"167", "N GLOBUS":"2080107", "CLASSIFICAÇÃO":"C", "QUANTIDADE":"1", "DESCRIÇÃO":"FOLHA MOLA 7a TRAS VW", "MIN":"N/A", "TIPO DE PEDIDO":"PARADO", "PREVISÃO DE ENTREGA/ STATUS":"ENTREGUE", "DATA CHEGADA":"03/03/2026", "HORÁRIO CHEGADA":"14:00", "DATA DE UTILIZAÇÃO":"04/03/2026", "HORÁRIO UTILIZAÇÃO":"09:00", "VALOR":"200.00"}
+  {"DATA":"01/03/2026", "HORA":"08:00", "PREFIXO":"2410", "CHAPA":"167", "N GLOBUS":"2080107", "CLASSIFICAÇÃO":"C", "QUANTIDADE":"1", "DESCRIÇÃO":"FOLHA MOLA 7a TRAS VW", "MIN":"N/A", "TIPO DE PEDIDO":"PARADO", "PREVISÃO DE ENTREGA/ STATUS":"ENTREGUE", "DATA CHEGADA":"03/03/2026", "HORÁRIO CHEGADA":"14:00", "DATA DE UTILIZAÇÃO":"", "HORÁRIO UTILIZAÇÃO":"", "VALOR":"200.00", "FRETE":"15.00"}
 ];
 
 let DADOS_COMPLETOS  = [];
@@ -560,17 +597,35 @@ function parseMoeda(v) {
 }
 
 function parseData(dataStr) {
-  if (!dataStr) return null;
-  if (dataStr.includes('/')) {
-    const [d, m, y] = dataStr.split('/');
-    return new Date(`${y}-${m}-${d}T12:00:00`); 
+  if (!dataStr || typeof dataStr !== 'string') return null;
+  let cleanStr = dataStr.trim().split(' ')[0];
+  if (cleanStr === '') return null;
+
+  if (cleanStr.includes('/')) {
+    const parts = cleanStr.split('/');
+    if (parts.length === 3) {
+       const dt = new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}T00:00:00`);
+       if (!isNaN(dt.getTime()) && dt.getFullYear() > 2000) return dt;
+    }
   }
-  return new Date(dataStr + 'T12:00:00');
+  
+  const dt = new Date(cleanStr + 'T00:00:00');
+  if(!isNaN(dt.getTime()) && dt.getFullYear() > 2000) return dt;
+  return null;
+}
+
+function diferencaDias(dtInicial, dtFinal) {
+  if(!dtInicial || !dtFinal) return null;
+  const inicio = new Date(dtInicial.getFullYear(), dtInicial.getMonth(), dtInicial.getDate());
+  const fim = new Date(dtFinal.getFullYear(), dtFinal.getMonth(), dtFinal.getDate());
+  
+  const difMilisegundos = fim.getTime() - inicio.getTime();
+  const umDia = 1000 * 60 * 60 * 24;
+  return Math.round(difMilisegundos / umDia);
 }
 
 function formatarHora(horaStr) {
   if (!horaStr || horaStr.trim() === '') return '—';
-  // Evita exibir datas que o excel converteu errado (ex: 1899-12-30)
   if (horaStr.length > 8) return '—';
   return horaStr;
 }
@@ -588,6 +643,7 @@ function navegar(viewId, elementoLink) {
   };
   document.getElementById('titulo-pagina').textContent = titulos[viewId];
   if(viewId === 'view-analises') {
+    renderizarChartEvolucao();
     renderizarChartPrefixo();
     renderizarChartColaborador();
   }
@@ -683,10 +739,14 @@ function aplicarFiltros() {
 
 function renderizarTudo() {
   atualizarKPIs();
-  renderizarChartEvolucao();
   renderizarChartTipo();
-  renderizarChartPrefixo();
-  renderizarChartColaborador();
+  
+  if(document.getElementById('view-analises').classList.contains('active')) {
+    renderizarChartEvolucao();
+    renderizarChartPrefixo();
+    renderizarChartColaborador();
+  }
+  
   renderizarTabelaPecas();
   renderizarTabelaGeral();
 }
@@ -698,34 +758,52 @@ function atualizarKPIs() {
   document.getElementById('kpi-total-sub').textContent = `${DADOS_FILTRADOS.length} pedidos no período`;
 
   const paradas = DADOS_FILTRADOS.filter(d => {
-    const tipo = (d[COL.TIPO_DE_PEDIDO]||'').toLowerCase();
-    const status = (d[COL.STATUS]||'').toLowerCase();
-    return tipo.includes('parad') || status.includes('estoque') || status === ''; 
+    const dataUtilizacao = (d[COL.DATA_UTILIZACAO] || '').trim();
+    return dataUtilizacao === '' || dataUtilizacao === '-' || dataUtilizacao === '—';
   });
   
   const valorParado = paradas.reduce((acc,d) => acc + parseMoeda(d[COL.VALOR]), 0);
   document.getElementById('kpi-parado').textContent = valorParado.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   document.getElementById('kpi-parado-sub').textContent = `${paradas.length} peças não utilizadas`;
 
-  let totalDias = 0, count = 0;
+  let somaDias = 0;
+  let qtdValidos = 0;
+  
   DADOS_FILTRADOS.forEach(d => {
-    if (d[COL.DATA] && d[COL.DATA_CHEGADA]) {
-      const dtSol = parseData(d[COL.DATA]);
-      const dtEnt = parseData(d[COL.DATA_CHEGADA]);
-      if(dtSol && dtEnt && !isNaN(dtSol) && !isNaN(dtEnt)){
-        const diff = (dtEnt - dtSol) / 86400000;
-        if (diff >= 0) { totalDias += diff; count++; }
+    const dtSol = parseData(d[COL.DATA]);
+    const dtEnt = parseData(d[COL.DATA_CHEGADA]);
+    
+    if (dtSol && dtEnt) {
+      const dias = diferencaDias(dtSol, dtEnt);
+      if (dias !== null && dias >= 0 && dias < 3650) { 
+         somaDias += dias;
+         qtdValidos++;
       }
     }
   });
-  document.getElementById('kpi-leadtime').textContent = count > 0 ? (totalDias/count).toFixed(1) + ' dias' : 'N/D';
+  
+  const leadTimeMedio = qtdValidos > 0 ? Math.round(somaDias / qtdValidos) : 0;
+  document.getElementById('kpi-leadtime').textContent = qtdValidos > 0 ? `${leadTimeMedio} dias` : 'N/D';
+
+  let countA = 0, countB = 0, countC = 0, countSC = 0;
+  DADOS_FILTRADOS.forEach(d => {
+    const classe = (d[COL.CLASSIFICACAO] || '').toUpperCase().trim();
+    if(classe === 'A') countA++;
+    else if(classe === 'B') countB++;
+    else if(classe === 'C') countC++;
+    else if(classe === 'SC') countSC++;
+  });
+  document.getElementById('kpi-class-a').textContent = countA;
+  document.getElementById('kpi-class-b').textContent = countB;
+  document.getElementById('kpi-class-c').textContent = countC;
+  document.getElementById('kpi-class-sc').textContent = countSC;
 }
 
 function renderizarChartEvolucao() {
+  if(!document.getElementById('chart-evolucao')) return;
   const paradas = DADOS_FILTRADOS.filter(d => {
-    const tipo = (d[COL.TIPO_DE_PEDIDO]||'').toLowerCase();
-    const status = (d[COL.STATUS]||'').toLowerCase();
-    return tipo.includes('parad') || status.includes('estoque') || status === '';
+    const dataUtilizacao = (d[COL.DATA_UTILIZACAO] || '').trim();
+    return dataUtilizacao === '' || dataUtilizacao === '-' || dataUtilizacao === '—';
   });
 
   const meses = {};
@@ -817,9 +895,8 @@ function renderizarChartColaborador() {
 // ─── TABELAS ─────────────────────────────────────────────────────
 function renderizarTabelaPecas() {
   const paradas = DADOS_FILTRADOS.filter(d => {
-    const tipo = (d[COL.TIPO_DE_PEDIDO]||'').toLowerCase();
-    const status = (d[COL.STATUS]||'').toLowerCase();
-    return tipo.includes('parad') || status.includes('estoque') || status === '';
+    const dataUtilizacao = (d[COL.DATA_UTILIZACAO] || '').trim();
+    return dataUtilizacao === '' || dataUtilizacao === '-' || dataUtilizacao === '—';
   });
 
   const total = paradas.length;
@@ -862,10 +939,9 @@ function renderizarTabelaGeral() {
   const tbody  = document.getElementById('tabela-geral-body');
 
   if (pagina.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;color:#94a3b8;padding:32px;">Nenhum dado disponível</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="19" style="text-align:center;color:#94a3b8;padding:32px;">Nenhum dado disponível</td></tr>';
   } else {
     tbody.innerHTML = pagina.map((d,i) => {
-      // Datas
       const dt = parseData(d[COL.DATA]);
       const data  = dt ? dt.toLocaleDateString('pt-BR') : '—';
       
@@ -875,14 +951,24 @@ function renderizarTabelaGeral() {
       const dtUtil = parseData(d[COL.DATA_UTILIZACAO]);
       const dataUtil = dtUtil ? dtUtil.toLocaleDateString('pt-BR') : '—';
 
-      // Horas formatadas (evita erros do excel)
       const hora = formatarHora(d[COL.HORA]);
       const horaChegada = formatarHora(d[COL.HORARIO_CHEGADA]);
       const horaUtil = formatarHora(d[COL.HORARIO_UTILIZACAO]);
 
       const valor = parseMoeda(d[COL.VALOR]).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-      const tipo  = d[COL.TIPO_DE_PEDIDO]||'—';
       
+      let freteExibicao = '—';
+      if(d[COL.FRETE] && d[COL.FRETE].trim() !== '') {
+        freteExibicao = parseMoeda(d[COL.FRETE]).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+      }
+
+      let leadTimeExibicao = '—';
+      if (dt && dtChegada) {
+        const dias = diferencaDias(dt, dtChegada);
+        if (dias !== null && dias >= 0) leadTimeExibicao = dias;
+      }
+
+      const tipo  = d[COL.TIPO_DE_PEDIDO]||'—';
       let tipoCor = 'badge-gray';
       if(tipo.toLowerCase().includes('corretiv')) tipoCor = 'badge-red';
       else if(tipo.toLowerCase().includes('preventiv')) tipoCor = 'badge-blue';
@@ -917,7 +1003,9 @@ function renderizarTabelaGeral() {
           <td>${horaChegada}</td>
           <td>${dataUtil}</td>
           <td>${horaUtil}</td>
+          <td style="font-weight:600; text-align:center;">${leadTimeExibicao}</td>
           <td><strong>${valor}</strong></td>
+          <td style="color:var(--cinza);">${freteExibicao}</td>
         </tr>`;
     }).join('');
   }
